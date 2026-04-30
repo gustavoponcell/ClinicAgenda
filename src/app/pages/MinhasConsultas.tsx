@@ -4,46 +4,80 @@ import { Calendar, User, Clock, AlertCircle } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { ConsultaPaciente, getStatusClassName, getStatusLabel } from '../data/mockData';
+import { api, Appointment, Patient } from '../services/api';
+import { getToken, saveSession } from '../services/authStorage';
+import { formatDateTime } from '../utils/format';
 
 export default function MinhasConsultas() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
-  const [consultas, setConsultas] = useState<ConsultaPaciente[]>([]);
+  const [consultas, setConsultas] = useState<Appointment[]>([]);
   const [filtro, setFiltro] = useState<'todas' | 'futuras' | 'passadas'>('futuras');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const userData = JSON.parse(user);
-      setUserName(userData.nome);
-    } else {
+    if (!getToken('patient')) {
       navigate('/login');
+      return;
     }
 
-    const storedConsultas = JSON.parse(localStorage.getItem('consultas') || '[]');
-    setConsultas(storedConsultas);
+    async function loadData() {
+      try {
+        const [user, appointments] = await Promise.all([
+          api.me<Patient>('patient'),
+          api.listMyAppointments(),
+        ]);
+        saveSession('patient', getToken('patient')!, user);
+        setUserName(user.nome);
+        setConsultas(appointments.items);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar consultas');
+      }
+    }
+
+    loadData();
   }, [navigate]);
 
-  const handleCancelar = (id: number) => {
+  const handleCancelar = async (id: string) => {
     if (
       window.confirm(
         'Tem certeza que deseja cancelar esta consulta? Cancelamentos devem ser feitos com no mínimo 24h de antecedência.'
       )
     ) {
-      const updated = consultas.map<ConsultaPaciente>((c) =>
-        c.id === id ? { ...c, status: 'cancelada' } : c
-      );
-      setConsultas(updated);
-      localStorage.setItem('consultas', JSON.stringify(updated));
+      try {
+        const updatedAppointment = await api.cancelAppointment(id, 'Cancelado pelo paciente');
+        setConsultas((current) => current.map((item) => (item.id === id ? updatedAppointment : item)));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao cancelar consulta');
+      }
     }
   };
 
   const consultasFiltradas = consultas.filter((c) => {
-    if (filtro === 'futuras') return c.status === 'agendada';
-    if (filtro === 'passadas') return c.status === 'cancelada' || c.status === 'realizada';
+    if (filtro === 'futuras') return c.status === 'AGENDADA' || c.status === 'REAGENDADA';
+    if (filtro === 'passadas') return c.status === 'CANCELADA' || c.status === 'REALIZADA';
     return true;
   });
+
+  const getStatusLabel = (status: Appointment['status']) => {
+    const labels = {
+      AGENDADA: 'Agendada',
+      CANCELADA: 'Cancelada',
+      REAGENDADA: 'Reagendada',
+      REALIZADA: 'Realizada',
+    };
+    return labels[status];
+  };
+
+  const getStatusClassName = (status: Appointment['status']) => {
+    const classes = {
+      AGENDADA: 'bg-[#E8F5F1] border-[#4CAF93] text-[#4CAF93]',
+      CANCELADA: 'bg-[#FFEBEE] border-[#E57373] text-[#E57373]',
+      REAGENDADA: 'bg-[#FFF3E0] border-[#FFA726] text-[#C77700]',
+      REALIZADA: 'bg-[#E3F2F7] border-[#2E7D9A] text-[#2E7D9A]',
+    };
+    return classes[status];
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#E3F2F7] via-white to-[#E8F5F1]">
@@ -52,6 +86,7 @@ export default function MinhasConsultas() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h2 className="text-3xl mb-4 text-[#2C3E50] font-bold">Minhas Consultas</h2>
+          {error && <p className="mb-4 rounded-xl bg-[#FFEBEE] px-4 py-3 text-sm text-[#E57373]">{error}</p>}
 
           <div className="flex flex-wrap gap-3">
             <button
@@ -104,11 +139,14 @@ export default function MinhasConsultas() {
           <div className="space-y-4">
             {consultasFiltradas.map((consulta) => (
               <Card key={consulta.id}>
+                {(() => {
+                  const formatted = formatDateTime(consulta.dataHora);
+                  return (
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-3 mb-3">
                       <h3 className="text-xl text-[#2C3E50] font-bold">
-                        {consulta.especialidade}
+                        {consulta.specialty?.nome}
                       </h3>
                       <span
                         className={`px-3 py-1 rounded-full border text-sm font-medium ${getStatusClassName(consulta.status)}`}
@@ -122,27 +160,27 @@ export default function MinhasConsultas() {
                         <User className="w-5 h-5 text-[#2E7D9A]" />
                         <div>
                           <p className="text-sm text-[#6C757D]">Profissional</p>
-                          <p className="text-[#2C3E50]">{consulta.profissional}</p>
+                          <p className="text-[#2C3E50]">{consulta.professional?.nome}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="w-5 h-5 text-[#2E7D9A]" />
                         <div>
                           <p className="text-sm text-[#6C757D]">Data</p>
-                          <p className="text-[#2C3E50]">{consulta.data}</p>
+                          <p className="text-[#2C3E50]">{formatted.data}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="w-5 h-5 text-[#2E7D9A]" />
                         <div>
                           <p className="text-sm text-[#6C757D]">Horário</p>
-                          <p className="text-[#2C3E50]">{consulta.horario}</p>
+                          <p className="text-[#2C3E50]">{formatted.horario}</p>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {consulta.status === 'agendada' && (
+                  {(consulta.status === 'AGENDADA' || consulta.status === 'REAGENDADA') && (
                     <div className="flex flex-col sm:flex-row gap-3 lg:ml-4">
                       <Button
                         variant="outline"
@@ -161,6 +199,8 @@ export default function MinhasConsultas() {
                     </div>
                   )}
                 </div>
+                  );
+                })()}
               </Card>
             ))}
           </div>

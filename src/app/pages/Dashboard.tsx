@@ -4,23 +4,41 @@ import { Calendar, User, Bell, Clock } from 'lucide-react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { api, Appointment, Patient } from '../services/api';
+import { getToken, saveSession } from '../services/authStorage';
+import { formatDateTime } from '../utils/format';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
+  const [proximaConsulta, setProximaConsulta] = useState<Appointment | null>(null);
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const userData = JSON.parse(user);
-      setUserName(userData.nome);
-    } else {
+    if (!getToken('patient')) {
       navigate('/login');
+      return;
     }
+
+    async function loadDashboard() {
+      try {
+        const [user, appointments] = await Promise.all([
+          api.me<Patient>('patient'),
+          api.listMyAppointments(),
+        ]);
+        saveSession('patient', getToken('patient')!, user);
+        setUserName(user.nome);
+        setProximaConsulta(
+          appointments.items.find((item) => item.status === 'AGENDADA' || item.status === 'REAGENDADA') ?? null,
+        );
+      } catch {
+        navigate('/login');
+      }
+    }
+
+    loadDashboard();
   }, [navigate]);
 
-  const consultas = JSON.parse(localStorage.getItem('consultas') || '[]');
-  const proximaConsulta = consultas.find((c: any) => c.status === 'agendada');
+  const formattedNext = proximaConsulta ? formatDateTime(proximaConsulta.dataHora) : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#E3F2F7] via-white to-[#E8F5F1]">
@@ -42,20 +60,20 @@ export default function Dashboard() {
               <div>
                 <p className="text-white/80 mb-2">Próxima consulta</p>
                 <h3 className="text-2xl mb-3">
-                  {proximaConsulta.especialidade}
+                  {proximaConsulta.specialty?.nome}
                 </h3>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <User className="w-5 h-5" />
-                    <span>{proximaConsulta.profissional}</span>
+                    <span>{proximaConsulta.professional?.nome}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-5 h-5" />
-                    <span>{proximaConsulta.data}</span>
+                    <span>{formattedNext?.data}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="w-5 h-5" />
-                    <span>{proximaConsulta.horario}</span>
+                    <span>{formattedNext?.horario}</span>
                   </div>
                 </div>
               </div>

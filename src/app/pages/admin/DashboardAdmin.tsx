@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AdminLayout } from '../../components/AdminLayout';
 import { Card } from '../../components/Card';
@@ -12,49 +13,54 @@ import {
   CalendarPlus,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { api, Appointment } from '../../services/api';
+import { formatDateTime } from '../../utils/format';
+
+interface DashboardReport {
+  consultasHoje: number;
+  consultasAtivas: number;
+  consultasCanceladas: number;
+  profissionaisAtivos: number;
+  pacientesCadastrados: number;
+}
 
 export default function DashboardAdmin() {
   const navigate = useNavigate();
+  const [report, setReport] = useState<DashboardReport | null>(null);
+  const [consultas, setConsultas] = useState<Appointment[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const [dashboardResponse, appointmentsResponse] = await Promise.all([
+          api.reportsDashboard(),
+          api.adminAppointments({ limit: 6 }),
+        ]);
+        setReport(dashboardResponse);
+        setConsultas(appointmentsResponse.items);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar dashboard');
+      }
+    }
+
+    loadDashboard();
+  }, []);
 
   const stats = [
-    { label: 'Consultas Hoje', value: '12', icon: Calendar, color: 'bg-[#2E7D9A]' },
-    { label: 'Confirmadas', value: '8', icon: CheckCircle, color: 'bg-[#4CAF93]' },
-    { label: 'Canceladas', value: '3', icon: XCircle, color: 'bg-[#E57373]' },
-    { label: 'Horários Disponíveis', value: '24', icon: Clock, color: 'bg-[#5DADE2]' },
+    { label: 'Consultas Hoje', value: report?.consultasHoje ?? 0, icon: Calendar, color: 'bg-[#2E7D9A]' },
+    { label: 'Ativas', value: report?.consultasAtivas ?? 0, icon: CheckCircle, color: 'bg-[#4CAF93]' },
+    { label: 'Canceladas', value: report?.consultasCanceladas ?? 0, icon: XCircle, color: 'bg-[#E57373]' },
+    { label: 'Profissionais Ativos', value: report?.profissionaisAtivos ?? 0, icon: Clock, color: 'bg-[#5DADE2]' },
   ];
 
-  const proximasConsultas = [
-    {
-      paciente: 'Maria Silva',
-      profissional: 'Dr. João Santos',
-      especialidade: 'Cardiologia',
-      horario: '09:00',
-      status: 'confirmada',
-    },
-    {
-      paciente: 'José Oliveira',
-      profissional: 'Dra. Ana Paula Costa',
-      especialidade: 'Cardiologia',
-      horario: '10:00',
-      status: 'confirmada',
-    },
-    {
-      paciente: 'Ana Costa',
-      profissional: 'Dra. Mariana Lima',
-      especialidade: 'Dermatologia',
-      horario: '11:00',
-      status: 'confirmada',
-    },
-  ];
-
-  const dadosGrafico = [
-    { dia: 'Seg', consultas: 15 },
-    { dia: 'Ter', consultas: 18 },
-    { dia: 'Qua', consultas: 12 },
-    { dia: 'Qui', consultas: 20 },
-    { dia: 'Sex', consultas: 16 },
-    { dia: 'Sáb', consultas: 8 },
-  ];
+  const dadosGrafico = useMemo(() => {
+    const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return dias.map((dia, index) => ({
+      dia,
+      consultas: consultas.filter((consulta) => new Date(consulta.dataHora).getDay() === index).length,
+    }));
+  }, [consultas]);
 
   return (
     <AdminLayout>
@@ -63,6 +69,12 @@ export default function DashboardAdmin() {
           <h2 className="text-2xl sm:text-3xl mb-2 text-[#2C3E50] font-bold">Dashboard Administrativo</h2>
           <p className="text-[#6C757D]">Visão geral das consultas e operações</p>
         </div>
+
+        {error && (
+          <div className="mb-6 rounded-2xl border border-[#E57373]/30 bg-[#FFEBEE] px-4 py-3 text-[#E57373]">
+            {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, index) => {
@@ -87,9 +99,9 @@ export default function DashboardAdmin() {
           <Card hover onClick={() => navigate('/admin/agenda')} className="cursor-pointer">
             <div className="flex items-center gap-3 mb-3">
               <CalendarPlus className="w-6 h-6 text-[#2E7D9A]" />
-              <h3 className="text-[#2C3E50] font-bold">Novo Agendamento</h3>
+              <h3 className="text-[#2C3E50] font-bold">Gerenciar Agenda</h3>
             </div>
-            <p className="text-[#6C757D] text-sm">Agendar consulta para paciente</p>
+            <p className="text-[#6C757D] text-sm">Visualizar e atualizar consultas</p>
           </Card>
 
           <Card hover onClick={() => navigate('/cadastro')} className="cursor-pointer">
@@ -111,44 +123,39 @@ export default function DashboardAdmin() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           <Card>
-            <h3 className="mb-6 text-[#2C3E50] font-bold">Próximas Consultas de Hoje</h3>
+            <h3 className="mb-6 text-[#2C3E50] font-bold">Próximas Consultas</h3>
             <div className="space-y-4">
-              {proximasConsultas.map((consulta, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-4 bg-[#F5F7FA] rounded-xl"
-                >
-                  <div className="flex-1">
-                    <p className="text-[#2C3E50] mb-1 font-medium">{consulta.paciente}</p>
-                    <p className="text-sm text-[#6C757D]">
-                      {consulta.profissional} - {consulta.especialidade}
-                    </p>
+              {consultas.slice(0, 4).map((consulta) => {
+                const formatted = formatDateTime(consulta.dataHora);
+                return (
+                  <div key={consulta.id} className="flex items-center justify-between p-4 bg-[#F5F7FA] rounded-xl">
+                    <div className="flex-1">
+                      <p className="text-[#2C3E50] mb-1 font-medium">{consulta.patient?.nome}</p>
+                      <p className="text-sm text-[#6C757D]">
+                        {consulta.professional?.nome} - {consulta.specialty?.nome}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[#2E7D9A] font-bold">{formatted.horario}</p>
+                      <p className="text-xs text-[#6C757D]">{formatted.data}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[#2E7D9A] font-bold">{consulta.horario}</p>
-                    <span className="inline-block mt-1 px-2 py-1 bg-[#E8F5F1] text-[#4CAF93] text-xs rounded-full font-medium">
-                      Confirmada
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+              {consultas.length === 0 && <p className="text-center text-[#6C757D] py-8">Nenhuma consulta encontrada.</p>}
             </div>
-            <Button
-              variant="outline"
-              className="w-full mt-6"
-              onClick={() => navigate('/admin/agenda')}
-            >
+            <Button variant="outline" className="w-full mt-6" onClick={() => navigate('/admin/agenda')}>
               Ver Agenda Completa
             </Button>
           </Card>
 
           <Card>
-            <h3 className="mb-6 text-[#2C3E50] font-bold">Consultas por Dia (Esta Semana)</h3>
+            <h3 className="mb-6 text-[#2C3E50] font-bold">Consultas por Dia</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={dadosGrafico}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#DDE2E8" />
                 <XAxis dataKey="dia" stroke="#6C757D" />
-                <YAxis stroke="#6C757D" />
+                <YAxis stroke="#6C757D" allowDecimals={false} />
                 <Tooltip />
                 <Bar dataKey="consultas" fill="#2E7D9A" radius={[8, 8, 0, 0]} />
               </BarChart>

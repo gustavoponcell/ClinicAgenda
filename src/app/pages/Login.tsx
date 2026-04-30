@@ -3,21 +3,30 @@ import { useNavigate } from 'react-router';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
+import { api } from '../services/api';
+import { saveSession } from '../services/authStorage';
 
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = {
-      nome: 'Maria Silva',
-      email: email,
-      cpf: '123.456.789-00',
-    };
-    localStorage.setItem('user', JSON.stringify(user));
-    navigate('/dashboard');
+    setError('');
+    setLoading(true);
+
+    try {
+      const session = await api.patientLogin({ email, senha });
+      saveSession('patient', session.token, session.user);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível entrar');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -64,6 +73,12 @@ export default function Login() {
               required
             />
 
+            {error && (
+              <p className="rounded-xl bg-[#FFEBEE] px-4 py-3 text-sm text-[#E57373]">
+                {error}
+              </p>
+            )}
+
             <div className="flex justify-end">
               <button
                 type="button"
@@ -73,8 +88,8 @@ export default function Login() {
               </button>
             </div>
 
-            <Button type="submit" className="w-full" size="lg">
-              Entrar
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
 

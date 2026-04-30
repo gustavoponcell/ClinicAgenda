@@ -5,11 +5,15 @@ import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { api, Patient } from '../services/api';
+import { getToken, saveSession } from '../services/authStorage';
 
 export default function Perfil() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
   const [salvo, setSalvo] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     nome: '',
     cpf: '',
@@ -18,19 +22,28 @@ export default function Perfil() {
   });
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const userData = JSON.parse(user);
-      setUserName(userData.nome);
+    if (!getToken('patient')) {
+      navigate('/login');
+      return;
+    }
+
+    async function loadProfile() {
+      try {
+        const userData = await api.me<Patient>('patient');
+        saveSession('patient', getToken('patient')!, userData);
+        setUserName(userData.nome);
       setFormData({
         nome: userData.nome,
         cpf: userData.cpf,
         telefone: userData.telefone || '',
         email: userData.email,
       });
-    } else {
+      } catch {
       navigate('/login');
+      }
     }
+
+    loadProfile();
   }, [navigate]);
 
   const handleChange = (field: string, value: string) => {
@@ -38,12 +51,32 @@ export default function Perfil() {
     setSalvo(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('user', JSON.stringify(formData));
-    setUserName(formData.nome);
-    setSalvo(true);
-    setTimeout(() => setSalvo(false), 3000);
+    setLoading(true);
+    setError('');
+
+    try {
+      const user = await api.updatePatientMe({
+        nome: formData.nome,
+        telefone: formData.telefone,
+        email: formData.email,
+      });
+      saveSession('patient', getToken('patient')!, user);
+      setUserName(user.nome);
+      setFormData({
+        nome: user.nome,
+        cpf: user.cpf,
+        telefone: user.telefone,
+        email: user.email,
+      });
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar perfil');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -67,6 +100,11 @@ export default function Perfil() {
 
         <Card>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <p className="rounded-xl bg-[#FFEBEE] px-4 py-3 text-sm text-[#E57373]">
+                {error}
+              </p>
+            )}
             <Input
               label="Nome completo"
               value={formData.nome}
@@ -103,7 +141,7 @@ export default function Perfil() {
             />
 
             <div className="pt-4">
-              <Button type="submit" size="lg" className="w-full md:w-auto">
+              <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading}>
                 {salvo ? (
                   <>
                     <Check className="w-5 h-5 mr-2" />

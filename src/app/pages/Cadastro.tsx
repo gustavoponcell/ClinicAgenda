@@ -4,6 +4,8 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { Shield } from 'lucide-react';
+import { api } from '../services/api';
+import { saveSession } from '../services/authStorage';
 
 export default function Cadastro() {
   const navigate = useNavigate();
@@ -14,17 +16,23 @@ export default function Cadastro() {
     email: '',
     senha: '',
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = {
-      nome: formData.nome,
-      email: formData.email,
-      cpf: formData.cpf,
-      telefone: formData.telefone,
-    };
-    localStorage.setItem('user', JSON.stringify(user));
-    navigate('/dashboard');
+    setError('');
+    setLoading(true);
+
+    try {
+      const session = await api.patientRegister(formData);
+      saveSession('patient', session.token, session.user);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível criar a conta');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (field: string, value: string) => {
@@ -100,6 +108,12 @@ export default function Cadastro() {
               required
             />
 
+            {error && (
+              <p className="rounded-xl bg-[#FFEBEE] px-4 py-3 text-sm text-[#E57373]">
+                {error}
+              </p>
+            )}
+
             <div className="bg-[#E8F5F1] p-4 rounded-xl flex gap-3 border border-[#4CAF93]/20">
               <Shield className="w-5 h-5 text-[#4CAF93] flex-shrink-0 mt-0.5" />
               <p className="text-sm text-[#2C3E50]">
@@ -108,8 +122,8 @@ export default function Cadastro() {
               </p>
             </div>
 
-            <Button type="submit" className="w-full" size="lg">
-              Criar Conta
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Criando...' : 'Criar Conta'}
             </Button>
           </form>
 

@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
+!backend/.env.example
 vite-dev.log
 vite-dev.err.log
 *.local

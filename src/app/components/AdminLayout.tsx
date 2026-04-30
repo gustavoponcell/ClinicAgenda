@@ -12,6 +12,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+import { clearSession, getStoredUser, getToken } from '../services/authStorage';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -22,11 +23,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const user = JSON.parse(localStorage.getItem('adminUser') || '{}');
-  const isAdmin = user.cargo === 'administrador';
+  const user = getStoredUser<any>('admin') || {};
+  const isAdmin = user.cargo === 'ADMIN';
 
   useEffect(() => {
-    if (!localStorage.getItem('adminUser')) {
+    if (!getToken('admin')) {
       navigate('/admin/login');
     }
   }, [navigate]);
@@ -37,14 +38,14 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/admin/profissionais', icon: UserCog, label: 'Profissionais', adminOnly: true },
     { path: '/admin/horarios', icon: Clock, label: 'Horários', adminOnly: true },
     { path: '/admin/funcionarios', icon: Users, label: 'Funcionários', adminOnly: true },
-    { path: '/admin/relatorios', icon: BarChart3, label: 'Relatórios' },
-    { path: '/admin/historico', icon: History, label: 'Histórico' },
+    { path: '/admin/relatorios', icon: BarChart3, label: 'Relatórios', adminOnly: true },
+    { path: '/admin/historico', icon: History, label: 'Histórico', adminOnly: true },
   ];
 
   const filteredMenuItems = menuItems.filter(item => !item.adminOnly || isAdmin);
 
   const handleLogout = () => {
-    localStorage.removeItem('adminUser');
+    clearSession('admin');
     navigate('/admin/login');
   };
 

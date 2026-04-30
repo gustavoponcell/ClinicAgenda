@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeRole {
+  ADMIN
+  RECEPCIONISTA
+}
+
+enum AppointmentStatus {
+  AGENDADA
+  CANCELADA
+  REAGENDADA
+  REALIZADA
+}
+
+enum WeekDay {
+  DOMINGO
+  SEGUNDA
+  TERCA
+  QUARTA
+  QUINTA
+  SEXTA
+  SABADO
+}
+
+enum ActorType {
+  PATIENT
+  EMPLOYEE
+  SYSTEM
+}
+
+model Patient {
+  id           String        @id @default(uuid())
+  nome         String
+  email        String        @unique
+  senhaHash    String
+  cpf          String        @unique
+  telefone     String
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("patients")
+}
+
+model Employee {
+  id        String       @id @default(uuid())
+  nome      String
+  email     String       @unique
+  senhaHash String
+  cargo     EmployeeRole
+  ativo     Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("employees")
+}
+
+model Professional {
+  id             String                  @id @default(uuid())
+  nome           String
+  email          String                  @unique
+  telefone       String
+  ativo          Boolean                 @default(true)
+  specialties    ProfessionalSpecialty[]
+  availabilities Availability[]
+  appointments   Appointment[]
+  blocks         ScheduleBlock[]
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@map("professionals")
+}
+
+model Specialty {
+  id            String                  @id @default(uuid())
+  nome          String                  @unique
+  descricao     String?
+  professionals ProfessionalSpecialty[]
+  appointments  Appointment[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@map("specialties")
+}
+
+model ProfessionalSpecialty {
+  professionalId String
+  specialtyId    String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  specialty      Specialty    @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@id([professionalId, specialtyId])
+  @@map("professional_specialties")
+}
+
+model Availability {
+  id             String       @id @default(uuid())
+  professionalId String
+  diaSemana      WeekDay
+  horaInicio     String
+  horaFim        String
+  ativo          Boolean      @default(true)
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([professionalId, diaSemana, ativo])
+  @@map("availabilities")
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  patientId      String
+  professionalId String
+  specialtyId    String
+  dataHora       DateTime
+  status         AppointmentStatus @default(AGENDADA)
+  observacoes    String?
+  patient        Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  professional   Professional      @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  specialty      Specialty         @relation(fields: [specialtyId], references: [id], onDelete: Restrict)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([patientId, dataHora])
+  @@index([professionalId, dataHora])
+  @@index([status])
+  @@map("appointments")
+}
+
+model ScheduleBlock {
+  id             String       @id @default(uuid())
+  professionalId String
+  inicio         DateTime
+  fim            DateTime
+  motivo         String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([professionalId, inicio, fim])
+  @@map("schedule_blocks")
+}
+
+model AuditLog {
+  id        String    @id @default(uuid())
+  actorType ActorType
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  createdAt DateTime  @default(now())
+
+  @@index([actorType, actorId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

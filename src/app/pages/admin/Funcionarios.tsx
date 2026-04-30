@@ -1,73 +1,73 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Users, Plus, Shield, Edit, Trash2 } from 'lucide-react';
+import { api, Employee } from '../../services/api';
 
 export default function Funcionarios() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [formData, setFormData] = useState({
     nome: '',
     email: '',
-    telefone: '',
-    cargo: 'recepcionista',
+    cargo: 'RECEPCIONISTA' as Employee['cargo'],
     senha: '',
   });
+  const [funcionarios, setFuncionarios] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const [funcionarios, setFuncionarios] = useState([
-    {
-      id: 1,
-      nome: 'Dr. Roberto Silva',
-      email: 'roberto.silva@clinica.com',
-      telefone: '(11) 98765-1111',
-      cargo: 'administrador',
-    },
-    {
-      id: 2,
-      nome: 'Juliana Santos',
-      email: 'juliana.santos@clinica.com',
-      telefone: '(11) 98765-2222',
-      cargo: 'recepcionista',
-    },
-    {
-      id: 3,
-      nome: 'Carlos Mendes',
-      email: 'carlos.mendes@clinica.com',
-      telefone: '(11) 98765-3333',
-      cargo: 'recepcionista',
-    },
-  ]);
+  useEffect(() => {
+    async function loadFuncionarios() {
+      try {
+        const response = await api.listEmployees();
+        setFuncionarios(response.items);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar funcionários');
+      } finally {
+        setLoading(false);
+      }
+    }
 
-  const handleSubmit = (e: React.FormEvent) => {
+    loadFuncionarios();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const novoFuncionario = {
-      id: Date.now(),
-      ...formData,
-    };
-    setFuncionarios([...funcionarios, novoFuncionario]);
-    setMostrarFormulario(false);
-    setFormData({
-      nome: '',
-      email: '',
-      telefone: '',
-      cargo: 'recepcionista',
-      senha: '',
-    });
-    alert('Funcionário cadastrado com sucesso!');
-  };
+    setError('');
 
-  const handleExcluir = (id: number) => {
-    if (window.confirm('Deseja excluir este funcionário?')) {
-      setFuncionarios(funcionarios.filter((f) => f.id !== id));
+    try {
+      const novoFuncionario = await api.createEmployee(formData);
+      setFuncionarios((current) => [...current, novoFuncionario]);
+      setMostrarFormulario(false);
+      setFormData({
+        nome: '',
+        email: '',
+        cargo: 'RECEPCIONISTA',
+        senha: '',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao cadastrar funcionário');
     }
   };
 
-  const getPermissoes = (cargo: string) => {
-    if (cargo === 'administrador') {
-      return 'Acesso total: Agenda, Profissionais, Funcionários e Relatórios';
+  const handleExcluir = async (id: string) => {
+    if (!window.confirm('Deseja excluir este funcionário?')) return;
+
+    try {
+      await api.deleteEmployee(id);
+      setFuncionarios((current) => current.filter((f) => f.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir funcionário');
     }
-    return 'Acesso limitado: Agenda e Pacientes';
+  };
+
+  const getPermissoes = (cargo: Employee['cargo']) => {
+    if (cargo === 'ADMIN') {
+      return 'Acesso total: Agenda, Profissionais, Funcionários, Relatórios e Histórico';
+    }
+    return 'Acesso limitado: Agenda, Pacientes, Profissionais e Horários';
   };
 
   return (
@@ -84,6 +84,12 @@ export default function Funcionarios() {
           </Button>
         </div>
 
+        {error && (
+          <div className="mb-6 rounded-2xl border border-[#E57373]/30 bg-[#FFEBEE] px-4 py-3 text-[#E57373]">
+            {error}
+          </div>
+        )}
+
         {mostrarFormulario && (
           <Card className="mb-6">
             <h3 className="mb-6 text-[#2C3E50] font-bold">Cadastrar Novo Funcionário</h3>
@@ -95,22 +101,13 @@ export default function Funcionarios() {
                 required
               />
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <Input
-                  label="E-mail"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
-                <Input
-                  label="Telefone"
-                  type="tel"
-                  value={formData.telefone}
-                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                  required
-                />
-              </div>
+              <Input
+                label="E-mail"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+              />
 
               <div>
                 <label className="block mb-2 text-[#2C3E50]">Cargo</label>
@@ -119,18 +116,14 @@ export default function Funcionarios() {
                     <input
                       type="radio"
                       name="cargo"
-                      value="recepcionista"
-                      checked={formData.cargo === 'recepcionista'}
-                      onChange={(e) =>
-                        setFormData({ ...formData, cargo: e.target.value })
-                      }
+                      value="RECEPCIONISTA"
+                      checked={formData.cargo === 'RECEPCIONISTA'}
+                      onChange={(e) => setFormData({ ...formData, cargo: e.target.value as Employee['cargo'] })}
                       className="mt-1"
                     />
                     <div>
                       <p className="text-[#2C3E50] mb-1 font-medium">Recepcionista</p>
-                      <p className="text-sm text-[#6C757D]">
-                        Acesso limitado: Agenda e Pacientes
-                      </p>
+                      <p className="text-sm text-[#6C757D]">Acesso operacional à agenda</p>
                     </div>
                   </label>
 
@@ -138,18 +131,14 @@ export default function Funcionarios() {
                     <input
                       type="radio"
                       name="cargo"
-                      value="administrador"
-                      checked={formData.cargo === 'administrador'}
-                      onChange={(e) =>
-                        setFormData({ ...formData, cargo: e.target.value })
-                      }
+                      value="ADMIN"
+                      checked={formData.cargo === 'ADMIN'}
+                      onChange={(e) => setFormData({ ...formData, cargo: e.target.value as Employee['cargo'] })}
                       className="mt-1"
                     />
                     <div>
                       <p className="text-[#2C3E50] mb-1 font-medium">Administrador</p>
-                      <p className="text-sm text-[#6C757D]">
-                        Acesso total: Todas as funcionalidades
-                      </p>
+                      <p className="text-sm text-[#6C757D]">Acesso total ao sistema</p>
                     </div>
                   </label>
                 </div>
@@ -168,11 +157,7 @@ export default function Funcionarios() {
                 <Button type="submit" className="flex-1">
                   Salvar Funcionário
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setMostrarFormulario(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setMostrarFormulario(false)}>
                   Cancelar
                 </Button>
               </div>
@@ -180,66 +165,46 @@ export default function Funcionarios() {
           </Card>
         )}
 
-        <div className="grid gap-4">
-          {funcionarios.map((func) => (
-            <Card key={func.id}>
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex gap-4 flex-1">
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      func.cargo === 'administrador'
-                        ? 'bg-[#E3F2F7]'
-                        : 'bg-[#E8F5F1]'
-                    }`}
-                  >
-                    {func.cargo === 'administrador' ? (
-                      <Shield className="w-6 h-6 text-[#2E7D9A]" />
-                    ) : (
-                      <Users className="w-6 h-6 text-[#4CAF93]" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-[#2C3E50] font-bold">{func.nome}</h3>
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm ${
-                          func.cargo === 'administrador'
-                            ? 'bg-[#E3F2F7] text-[#2E7D9A]'
-                            : 'bg-[#E8F5F1] text-[#4CAF93]'
-                        }`}
-                      >
-                        {func.cargo === 'administrador'
-                          ? 'Administrador'
-                          : 'Recepcionista'}
-                      </span>
+        {loading ? (
+          <Card className="text-center text-[#6C757D]">Carregando funcionários...</Card>
+        ) : (
+          <div className="grid gap-4">
+            {funcionarios.map((func) => (
+              <Card key={func.id}>
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex gap-4 flex-1">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${func.cargo === 'ADMIN' ? 'bg-[#E3F2F7]' : 'bg-[#E8F5F1]'}`}>
+                      {func.cargo === 'ADMIN' ? <Shield className="w-6 h-6 text-[#2E7D9A]" /> : <Users className="w-6 h-6 text-[#4CAF93]" />}
                     </div>
-                    <p className="text-sm text-[#6C757D] mb-3">
-                      {getPermissoes(func.cargo)}
-                    </p>
-                    <div className="grid md:grid-cols-2 gap-2 text-sm text-[#6C757D]">
-                      <p>{func.email}</p>
-                      <p>{func.telefone}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className="text-[#2C3E50] font-bold">{func.nome}</h3>
+                        <span className={`px-3 py-1 rounded-full text-sm ${func.cargo === 'ADMIN' ? 'bg-[#E3F2F7] text-[#2E7D9A]' : 'bg-[#E8F5F1] text-[#4CAF93]'}`}>
+                          {func.cargo === 'ADMIN' ? 'Administrador' : 'Recepcionista'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-[#6C757D] mb-3">{getPermissoes(func.cargo)}</p>
+                      <div className="grid md:grid-cols-2 gap-2 text-sm text-[#6C757D]">
+                        <p>{func.email}</p>
+                        <p>{func.ativo ? 'Ativo' : 'Inativo'}</p>
+                      </div>
                     </div>
                   </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" size="sm">
+                      <Edit className="w-4 h-4 mr-1" />
+                      Editar
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleExcluir(func.id)}>
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Excluir
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button variant="outline" size="sm">
-                    <Edit className="w-4 h-4 mr-1" />
-                    Editar
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleExcluir(func.id)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Excluir
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );

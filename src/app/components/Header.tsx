@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router';
 import { User, LogOut } from 'lucide-react';
+import { clearSession } from '../services/authStorage';
 
 interface HeaderProps {
   showUserMenu?: boolean;
@@ -10,7 +11,7 @@ export function Header({ showUserMenu = false, userName }: HeaderProps) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    clearSession('patient');
     navigate('/');
   };
 

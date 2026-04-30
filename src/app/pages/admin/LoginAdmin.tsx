@@ -4,21 +4,30 @@ import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { Card } from '../../components/Card';
 import { Shield } from 'lucide-react';
+import { api } from '../../services/api';
+import { saveSession } from '../../services/authStorage';
 
 export default function LoginAdmin() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const adminUser = {
-      nome: 'Dr. Roberto Silva',
-      email: email,
-      cargo: 'administrador',
-    };
-    localStorage.setItem('adminUser', JSON.stringify(adminUser));
-    navigate('/admin/dashboard');
+    setError('');
+    setLoading(true);
+
+    try {
+      const session = await api.adminLogin({ email, senha });
+      saveSession('admin', session.token, session.user);
+      navigate('/admin/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível entrar no painel');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,8 +83,14 @@ export default function LoginAdmin() {
               required
             />
 
-            <Button type="submit" className="w-full" size="lg">
-              Entrar no Painel
+            {error && (
+              <p className="rounded-xl bg-[#FFEBEE] px-4 py-3 text-sm text-[#E57373]">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? 'Entrando...' : 'Entrar no Painel'}
             </Button>
           </form>
 
